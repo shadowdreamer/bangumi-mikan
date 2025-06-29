@@ -10,11 +10,19 @@
 	"observability": {
 		"enabled": true
 	},
-	"triggers": {
-		"crons": [
-			"* * * * *"
-		]
-	}
+ 
+	"d1_databases": [
+    {
+      "binding": "BANGUMI_DB",
+      "database_name": "bangumi_data",
+      "database_id": "4b3eaf16-9eba-4c66-9d69-5906198549d3",
+      "preview_database_id": "YOUR_PREVIEW_D1_ID"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 16 * * *"]
+  }
+
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
