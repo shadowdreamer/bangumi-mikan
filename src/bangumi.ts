@@ -34,22 +34,71 @@ export async function bulkSync(db: D1Database): Promise<string> {
   const res = await fetch(
     'https://raw.githubusercontent.com/xiaoyvyv/bangumi-data/main/data/mikan/bangumi-mikan.json'
   );
-  if (!res.ok) throw new Error('Fetch failed ' + res.status);
-  const obj: Record<string, string> = await res.json();
 
-  const entries = Object.entries(obj).filter(([b, m]) => b && m);
-  const valuesSql = entries
-    .map(([mikan, bgm]) => `(${bgm}, ${mikan})`)
-    .join(',');
+  
+  
+  if (!res.ok) throw new Error('Fetch failed ' + res.status);
+  const text = await res.text();
+  
+  const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  // to 8length string 
+  const newHash = Array.from(new Uint8Array(hashBuffer))
+    .slice(0, 8)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+ 
+  const last = await getLastHash(db);
+
+  console.log('last hash', last);
+  console.log('new hash', newHash);
+  
+  // 如果 hash 相同，不做任何操作
+  if(last === newHash){
+    return `Hash not changed, skip at ${new Date().toISOString()}`;
+  }
+  
+  const obj: Record<string, string> = JSON.parse(text);
+
+  const values: string[] = [];
+  for (const [bgm, mikan] of Object.entries(obj)) {
+    if (bgm && mikan) {
+      values.push(`('${bgm}', '${mikan}')`);
+    }
+  }
+  const valuesSql = values.join(',');
+
   await db.exec(`DROP TABLE IF EXISTS bangumi_mikan`);
-  await db.exec(`
-    CREATE TABLE bangumi_mikan ( bangumi_id TEXT PRIMARY KEY, mikan_id TEXT )
-  `.trim());
+  await db.exec(`CREATE TABLE bangumi_mikan ( bangumi_id TEXT PRIMARY KEY, mikan_id TEXT )`);
+   // 更新 meta 表
+  await db.batch([
+    db.prepare("DELETE FROM meta WHERE key='last_hash'"),
+    db.prepare(
+      "INSERT INTO meta (key, hash, updated_at) VALUES ('last_hash', ?, CURRENT_TIMESTAMP)"
+    ).bind(newHash),
+  ]);
   
   // 如果没有记录，插入空表
-  if(entries.length){
+  if(values.length){
     await db.exec(` INSERT INTO bangumi_mikan (bangumi_id, mikan_id) VALUES ${valuesSql}`);
   }
  
-  return `Bulk synced ${entries.length} records at ${new Date().toISOString()}`;
+  return `Bulk synced ${values.length} records at ${new Date().toISOString()}`;
+}
+
+async function getLastHash(db: D1Database) {
+  const exists = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='meta'")
+    .first();
+
+  if (!exists) {
+    await db.exec(`CREATE TABLE IF NOT EXISTS meta ( \
+      key TEXT PRIMARY KEY, \
+      hash TEXT,\
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP \
+      )`.trim());
+    return null;
+  }
+
+  const row = await db.prepare("SELECT hash FROM meta WHERE key='last_hash'").first();
+  return row?.hash ?? null;
 }
