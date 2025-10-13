@@ -3,18 +3,17 @@ import { cors } from 'hono/cors'
 
 export type Env = { BANGUMI_DB: D1Database }
 
-export const app = new Hono<{ Bindings: Env }>()
-app.use('*', cors())
-
-app.get('/', async (c) => {
+export const bangumiApp = new Hono<{ Bindings: Env }>()
+bangumiApp.use('/*', cors())
+bangumiApp.get('/', async (c) => {
   return c.text('Bangumi Mikan kv store')
 })
-app.get('/refresh', async (c) => {
+bangumiApp.get('/refresh', async (c) => {
   const msg = await bulkSync(c.env.BANGUMI_DB)
   return c.text(msg)
 })
 
-app.get('/query', async (c) => {
+bangumiApp.get('/query', async (c) => {
   const id = c.req.query('id')
   if (!id) return c.text('Missing id', 400)
   const { results } = await c.env.BANGUMI_DB
@@ -25,7 +24,7 @@ app.get('/query', async (c) => {
   return c.json({ bangumi_id: id, mikan_id: results[0].mikan_id })
 })
 
-app.get('/__scheduled', async (c) => {
+bangumiApp.get('/__scheduled', async (c) => {
   const msg = await bulkSync(c.env.BANGUMI_DB)
   return c.text(`[scheduled] ${msg}`)
 })

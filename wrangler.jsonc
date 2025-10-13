@@ -4,8 +4,8 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "bangumi-mikan",
-	"main": "src/index.ts",
+	"name": "api",
+	"main": "api/index.ts",
 	"compatibility_date": "2025-06-27",
 	"observability": {
 		"enabled": true
@@ -17,12 +17,18 @@
       "database_name": "bangumi_data",
       "database_id": "4b3eaf16-9eba-4c66-9d69-5906198549d3",
       "preview_database_id": "YOUR_PREVIEW_D1_ID"
+    },
+		{
+      "binding": "MISC_DB",
+      "database_name": "misc",
+      "database_id": "8433d41e-719a-45a8-b26d-7a84c3e6c630",
+      "preview_database_id": "YOUR_PREVIEW_D1_ID"
     }
   ],
   "triggers": {
     "crons": ["0 16 * * *"]
   }
-
+	// "assets": {}
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
