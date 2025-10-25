@@ -9,7 +9,7 @@ bangumiApp.get('/', async (c) => {
   return c.text('Bangumi Mikan kv store')
 })
 bangumiApp.get('/refresh', async (c) => {
-  const msg = await bulkSync(c.env.BANGUMI_DB)
+  const msg = await bulkSync(c.env.BANGUMI_DB, true)
   return c.text(msg)
 })
 
@@ -29,37 +29,38 @@ bangumiApp.get('/__scheduled', async (c) => {
   return c.text(`[scheduled] ${msg}`)
 })
 
-export async function bulkSync(db: D1Database): Promise<string> {
+export async function bulkSync(db: D1Database, skipCheckHash = false): Promise<string> {
   const res = await fetch(
     'https://raw.githubusercontent.com/xiaoyvyv/bangumi-data/main/data/mikan/bangumi-mikan.json'
   );
 
-  
-  
+
+
   if (!res.ok) throw new Error('Fetch failed ' + res.status);
   const text = await res.text();
-  
+
   const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  // to 8length string 
+  // to 8length string
   const newHash = Array.from(new Uint8Array(hashBuffer))
     .slice(0, 8)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
- 
-  const last = await getLastHash(db);
 
-  console.log('last hash', last);
-  console.log('new hash', newHash);
-  
-  // 如果 hash 相同，不做任何操作
-  if(last === newHash){
-    return `Hash not changed, skip at ${new Date().toISOString()}`;
-  }
-  
-  const obj: Record<string, string> = JSON.parse(text);
+	if(!skipCheckHash){
+		const last = await getLastHash(db);
+		// 如果 hash 相同，不做任何操作
+		if(last === newHash){
+			return `Hash not changed, skip at ${new Date().toISOString()}`;
+		}
+	}
+
+	type Brand<K, T> = K & { __brand: T };
+  type BGM_ID = Brand<string, "BGM_ID">;
+	type MIKAN_ID = Brand<string, "MIKAN_ID">;
+  const obj: Record<MIKAN_ID, BGM_ID> = JSON.parse(text);
 
   const values: string[] = [];
-  for (const [bgm, mikan] of Object.entries(obj)) {
+  for (const [mikan, bgm] of Object.entries(obj)) {
     if (bgm && mikan) {
       values.push(`('${bgm}', '${mikan}')`);
     }
@@ -75,13 +76,13 @@ export async function bulkSync(db: D1Database): Promise<string> {
       "INSERT INTO meta (key, hash, updated_at) VALUES ('last_hash', ?, CURRENT_TIMESTAMP)"
     ).bind(newHash),
   ]);
-  
+
   // 如果没有记录，插入空表
   if(values.length){
     await db.exec(` INSERT INTO bangumi_mikan (bangumi_id, mikan_id) VALUES ${valuesSql}`);
   }
- 
-  return `Bulk synced ${values.length} records at ${new Date().toISOString()}`;
+
+  return `Bulk synced ${values.length} records at ${new Date().toISOString()}, ${skipCheckHash ? 'skipCheckHash' : ''}`;
 }
 
 async function getLastHash(db: D1Database) {
